@@ -20,16 +20,37 @@ async function startServer() {
   const app = express();
 
   // ------------------------------------
-  // GLOBAL MIDDLEWARES (MUST BE FIRST)
+  // GLOBAL MIDDLEWARES
   // ------------------------------------
   app.use(cors());
   app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
   
   // Connect Database
   await connectDatabase();
 
+  // Homepage
+  app.get("/", (req, res) => {
+    res.json({
+      status: 'ok',
+      message: 'Server is running 🚀',
+      endpoints: {
+        graphql: '/graphql',
+        api: '/api',
+        health: '/health'
+      }
+    });
+  });
+
+  // Apply rate limiter to API routes only
+  app.use('/api', apiRateLimiter);
+
+  // Setup REST API routes
+  setupRoutes(app);
+
   // ------------------------------------
-  // APOLLO SERVER (BEFORE REST ROUTES)
+  // APOLLO SERVER
   // ------------------------------------
   const apolloServer = new ApolloServer({
     typeDefs,
@@ -39,35 +60,13 @@ async function startServer() {
 
   await apolloServer.start();
 
-  // GraphQL endpoint with its own body parser
+  // GraphQL endpoint
   app.use(
     "/graphql",
-    cors(),
-    express.json(),
     expressMiddleware(apolloServer, {
       context: async ({ req }) => ({ req }),
     })
   );
-
-  // Body parsers for REST API routes
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-  app.use(apiRateLimiter);
-
-  // Setup REST API routes
-  setupRoutes(app);
-
-  // Homepage
-  app.get("/", (req, res) => {
-    res.send(`
-      <html>
-        <body>
-          <h1>Server is running 🚀</h1>
-          <script>console.log("Server is running!")</script>
-        </body>
-      </html>
-    `);
-  });
 
   // Error Handler (MUST BE LAST)
   app.use(errorHandler);
@@ -85,3 +84,4 @@ startServer().catch((error) => {
   logger.error('Failed to start server:', error);
   process.exit(1);
 });
+
