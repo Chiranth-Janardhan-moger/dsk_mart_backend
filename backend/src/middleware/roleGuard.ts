@@ -1,0 +1,2 @@
+export { roleGuard } from './auth';
+
